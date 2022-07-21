@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<garminciqsim>
+    <device id="fenix6x,fenix6xpro">
+        <light>41,177</light>
+        <start>394,177</start>
+        <stop>394,177</stop>
+        <enter>394,177</enter>       
+        <menu>13,282</menu>
+        <up>13,282</up>
+        <down>41,381</down>
+        <back>394,381</back>
+        <lap>394,381</lap>
+    </device>
+    <device id="vivoactive">
+        <light></light>
+        <start></start>
+        <stop></stop>
+        <enter></enter>       
+        <menu></menu>
+        <up></up>
+        <down></down>
+        <back></back>
+        <lap></lap>
+    </device>
+</garminciqsim>

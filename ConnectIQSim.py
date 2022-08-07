@@ -1,5 +1,5 @@
 import cmd
-from distutils.command.build import build
+# from distutils.command.build import build
 import subprocess
 import time
 from typing import final
@@ -7,6 +7,7 @@ import psutil
 from os import path
 from pywinauto import Application, mouse, timings, findwindows, keyboard
 import xmltodict
+import platform
 
 class ConnectIQSim:
  
@@ -22,7 +23,11 @@ class ConnectIQSim:
 
     # init method or constructor
     def __init__(self):
-        ciqsdkcfg = path.expandvars(r'$APPDATA\Garmin\ConnectIQ\current-sdk.cfg')
+        if platform.system().lower() == "windows":
+            ciqsdkcfg = path.expandvars(r'$APPDATA\Garmin\ConnectIQ\current-sdk.cfg')
+        else:
+            ciqsdkcfg = path.expandvars('$HOME/.Garmin/ConnectIQ/current-sdk.cfg')
+        
         f = open(ciqsdkcfg, "r")
         self.__ciqsdkpath = f.readline()
         f.close()
@@ -31,11 +36,17 @@ class ConnectIQSim:
         
     def __del__(self):
         if self.__prg_pid != 0:
-            subprocess.Popen("taskkill /f /pid " + str(self.__prg_pid))
+            if platform.system().lower() == "windows":
+                subprocess.Popen("taskkill /f /pid " + str(self.__prg_pid))
+            else:
+                subprocess.Popen("kill " + str(self.__prg_pid), shell=True)
             self.__prg_pid = 0
 
         if self.__simulator_pid != 0:
-            subprocess.Popen("taskkill /pid " + str(self.__simulator_pid))
+            if platform.system().lower() == "windows":
+                subprocess.Popen("taskkill /pid " + str(self.__simulator_pid))
+            else:
+                subprocess.Popen("kill " + str(self.__simulator_pid), shell=True)    
             self.__simulator_pid = 0
     
     def build(self, junglefile, outputfile, developer_key_file, device_id):
@@ -51,27 +62,38 @@ class ConnectIQSim:
         # -w -r 
         cmdline = [ "java", "-Xms1g", "-Dfile.encoding=UTF-8", "-Dapple.awt.UIElement=true", "-jar", self.__ciqclasspath, "-o", outputfile, "-f", junglefile, "-y", developer_key_file, "-d", device_id, "-w", "-r" ];
         cmdline = " ".join(cmdline)
-        buildprocess = subprocess.run(cmdline, stdout=subprocess.PIPE)
+        buildprocess = subprocess.run(cmdline, stdout=subprocess.PIPE, shell=True)
         return buildprocess.returncode
 
     def launch_simulator(self, timeout=40):
         #if self.simulator_pid != 0:
         #    subprocess.Popen("taskkill /pid " + str(self.simulator_pid))
         #    self.simulator_pid = 0
+        if platform.system().lower() == "windows":
+            simulator_exe = "simulator.exe"
+        else:
+            simulator_exe = "simulator"
         
         for process in psutil.process_iter():
-            if process.name() == "simulator.exe":
-                print("Found an existing simulator.exe process")
+            if process.name() == simulator_exe:
+                print(f'Found an existing {simulator_exe} process')
                 process.kill()
         
-        simulator_exe =  path.join(self.__ciqsdkpath, "bin", "simulator.exe")
-        print(f"Running {simulator_exe}")
-        self.__simulator_pid = subprocess.Popen(simulator_exe, stdout=subprocess.PIPE).pid
+        simulator_exe_path =  path.join(self.__ciqsdkpath, "bin", simulator_exe)
+        print(f"Running {simulator_exe_path}")
+        self.__simulator_pid = subprocess.Popen(simulator_exe_path, stdout=subprocess.PIPE).pid
         print(f"Simulator PID: {self.__simulator_pid}")
-        app = Application(backend="uia").connect(path="simulator.exe")
+        
         try:
             t = time.time()
-            ciqwin = app.window(title=u"Connect IQ Device Simulator")
+            if platform.system().lower() == "windows":
+                app = Application(backend="uia").connect(path=simulator_exe)
+                ciqwin = app.window(title=u"Connect IQ Device Simulator")
+            else:    
+                app = Application()
+                app.connect(pid=self.__simulator_pid)
+                ciqwin = app.window(name=u"simulator")
+            
             ciqwin.wait("ready", timeout=timeout)
             ciqwin.set_focus()
             # ciqwin.dump_tree()
@@ -84,7 +106,11 @@ class ConnectIQSim:
 
     def launch(self, prgpath, device_id):
         # self.launch_simulator()
-        
+        if platform.system().lower() == "windows":
+            shell_exe = "shell.exe"
+        else:
+            shell_exe = "shell"
+
         self.__prgpath = prgpath
         self.__device_id = device_id
         # java -classpath "%home%monkeybrains.jar" com.garmin.monkeybrains.monkeydodeux.MonkeyDoDeux 
@@ -98,10 +124,10 @@ class ConnectIQSim:
             "-classpath", self.__ciqclasspath, "com.garmin.monkeybrains.monkeydodeux.MonkeyDoDeux",
             "-f", self.__prgpath,
             "-d", self.__device_id,
-            "-s", path.join(self.__ciqsdkpath, "bin", "shell.exe") ]
+            "-s", path.join(self.__ciqsdkpath, "bin", shell_exe) ]
         cmdline = " ".join(cmdline)
-        # print (cmdline)
-        self.__prg_pid = subprocess.Popen(cmdline).pid
+        # print(cmdline)
+        self.__prg_pid = subprocess.Popen(cmdline, shell=True).pid
 
         script_dir = path.abspath( path.dirname( __file__ ) )
         f = open(path.join(script_dir, "garminciqsim.xml"), "r")
@@ -146,9 +172,10 @@ class ConnectIQSim:
             dlg.OK.click()
 
     def takeScreenShot(self, path):
+        print(self.__ciq_sim)
         if not self.__ciq_sim is None:
             img = self.__ciq_sim.panel.capture_as_image()
-            img.save(path)        
+            img.save(path)
 
     def press(self, button):
         if not self.__ciq_sim is None:
